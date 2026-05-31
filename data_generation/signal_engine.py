@@ -27,7 +27,7 @@ def generate_sonar_signal(t, coords, r_direct, fs=1000.0):
     cavitation_signature = shaped_hiss * modulation
     
     # Combine into a single core structural signature emitted by the boat
-    raw_sub_signal = 0.6 * machinery_tone + 0.4 * cavitation_signature
+    raw_sub_signal = 1 * machinery_tone + 0.6 * cavitation_signature
     
     # -------------------------------------------------------------------------
     # PART 2: MULTI-PATH ACOUSTIC PROPAGATION (The Arctic Waveguide)
@@ -62,10 +62,10 @@ def generate_sonar_signal(t, coords, r_direct, fs=1000.0):
         # Constructive accumulation with environmental damping (attenuation)
         # We ensure indices stay within the boundaries of our simulated time array
         if idx_d >= 0:
-            received_signal[i] += raw_sub_signal[idx_d] / (r_d**2)
+            received_signal[i] += raw_sub_signal[idx_d] / r_d
         if idx_ice >= 0:
-            received_signal[i] += (-0.4 * raw_sub_signal[idx_ice]) / (r_ice**2)
+            received_signal[i] += (-0.4 * raw_sub_signal[idx_ice]) / r_ice
         if idx_floor >= 0:
-            received_signal[i] += (0.6 * raw_sub_signal[idx_floor]) / (r_floor**2)
+            received_signal[i] += (0.6 * raw_sub_signal[idx_floor]) / r_floor
             
     return received_signal
