@@ -16,34 +16,19 @@ def main():
     print("Calculating target trajectory and 3D coordinate transformations...")
     coords, r_direct = calculate_submarine_trajectory(t)
     
-    # 3. Generate the acoustic multi-path environment signature
-    print("Synthesizing raw machinery tones, cavitation, and waveguide echoes...")
-    received_signal = generate_sonar_signal(t, coords, r_direct, fs=fs)
+    # 3. Retrieve the singular, composite sea signal from the generation engine
+    # (The engine now handles both the target signature and the ambient noise floor)
+    print("Receiving environmental acoustic time-series data...")
+    final_sonar_audio = generate_sonar_signal(t, coords, r_direct, fs=fs)
     
-    # 4. Inject low-level background ambient Pink Noise (1/f profile)
-    # This acts as our baseline environmental floor before your teammate's stress tests
-    print("Injecting ambient background noise floor...")
-    white_noise = np.random.normal(0, 1.0, len(t))
-    # Fourier transform to scale frequencies by 1/f
-    noise_fft = np.fft.rfft(white_noise)
-    frequencies = np.fft.rfftfreq(len(t), d=1/fs)
-    frequencies[0] = 1.0  # Avoid division by zero at DC component
-    pink_filter = 1.0 / np.sqrt(frequencies)
-    pink_noise_fft = noise_fft * pink_filter
-    pink_noise = np.fft.irfft(pink_noise_fft, len(t))
-    
-    # Normalize noise energy and mix it into our receiver stream
-    pink_noise = (pink_noise / np.std(pink_noise)) * 0.005
-    final_sonar_audio = received_signal + pink_noise
-    
-    # 5. Execute the Short-Time Fourier Transform (STFT)
+    # 4. Execute the Short-Time Fourier Transform (STFT) Analysis
     print("Computing Short-Time Fourier Transform (STFT)...")
     f_bins, t_bins, Zxx = stft(final_sonar_audio, fs=fs, window='hann', nperseg=256, noverlap=128)
     
     # Convert magnitude to Decibels (dB) for standard sonar visualization
     spectrogram_db = 20 * np.log10(np.abs(Zxx) + 1e-10)
     
-    # 6. Plotting the final baseline Spectrogram
+    # 5. Plotting the final baseline Spectrogram
     print("Generating Time-Frequency Spectrogram plot...")
     plt.figure(figsize=(12, 6))
     plt.pcolormesh(t_bins, f_bins, spectrogram_db, shading='gouraud', cmap='viridis')
