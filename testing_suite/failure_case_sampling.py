@@ -35,6 +35,20 @@ def create_pink_noise(t, fs, noise_level, seed=42):
 
 
 # ------------------------------------------------------------
+# Calculate alias frequency
+# ------------------------------------------------------------
+def alias_frequency(true_frequency, fs):
+    """
+    Calculates where a frequency appears after aliasing.
+    Example:
+    true frequency = 160 Hz
+    fs = 250 Hz
+    alias = 90 Hz
+    """
+    return abs(((true_frequency + fs / 2) % fs) - fs / 2)
+
+
+# ------------------------------------------------------------
 # Compute one spectrogram
 # ------------------------------------------------------------
 def compute_spectrogram(
@@ -65,11 +79,9 @@ def compute_spectrogram(
 
 
 # ------------------------------------------------------------
-# Save one PNG frame
+# Save one frame for the sampling failure case
 # ------------------------------------------------------------
-def save_frame(
-    case_title,
-    subtitle,
+def save_sampling_failure_frame(
     output_path,
     fs=1000.0,
     duration=60.0,
@@ -85,6 +97,9 @@ def save_frame(
         noverlap=noverlap
     )
 
+    nyquist = fs / 2
+    alias_160 = alias_frequency(160.0, fs)
+
     plt.figure(figsize=(12, 6))
 
     plt.pcolormesh(
@@ -95,23 +110,87 @@ def save_frame(
         cmap="viridis"
     )
 
-    plt.title(f"{case_title}\n{subtitle}", fontsize=14, fontweight="bold")
+    plt.title(
+        f"Failure Case: Sampling Rate Below Nyquist\n"
+        f"fs = {fs:.0f} Hz | Nyquist = {nyquist:.0f} Hz | True harmonic = 160 Hz",
+        fontsize=14,
+        fontweight="bold"
+    )
+
     plt.xlabel("Time (seconds)", fontsize=12)
     plt.ylabel("Frequency (Hz)", fontsize=12)
-    plt.ylim(0, 250)
+
+    # Only show valid frequency range
+    plt.ylim(0, min(250, nyquist))
 
     cbar = plt.colorbar()
     cbar.set_label("Relative Intensity (dB)", fontsize=12)
+
+    # Mark true 80 Hz tone if it is below Nyquist
+    if 80 < nyquist:
+        plt.axhline(80, color="white", linestyle="--", linewidth=1.5)
+        plt.text(
+            1,
+            82,
+            "True 80 Hz tone",
+            fontsize=10,
+            color="black",
+            backgroundcolor="white"
+        )
+
+    # Mark true 160 Hz harmonic if it can be represented
+    if 160 < nyquist:
+        plt.axhline(160, color="white", linestyle="--", linewidth=1.5)
+        plt.text(
+            1,
+            162,
+            "True 160 Hz harmonic",
+            fontsize=10,
+            color="black",
+            backgroundcolor="white"
+        )
+
+        status_text = "OK: 160 Hz is below Nyquist and can be represented correctly."
+
+    else:
+        # If 160 Hz is above Nyquist, mark where it falsely appears
+        plt.axhline(alias_160, color="red", linestyle="--", linewidth=2.0)
+        plt.text(
+            1,
+            alias_160 + 2,
+            f"Misleading alias: 160 Hz appears near {alias_160:.1f} Hz",
+            fontsize=10,
+            color="black",
+            backgroundcolor="white"
+        )
+
+        status_text = (
+            "FAILURE: 160 Hz is above Nyquist.\n"
+            "The DFT/STFT can show a false lower frequency."
+        )
+
+    # Add explanation box
+    plt.text(
+        0.98,
+        0.95,
+        status_text,
+        transform=plt.gca().transAxes,
+        fontsize=10,
+        verticalalignment="top",
+        horizontalalignment="right",
+        color="black",
+        backgroundcolor="white"
+    )
 
     plt.tight_layout()
     plt.savefig(output_path, dpi=150)
     plt.close()
 
-    print(f"Saved frame: {output_path}")
+    print(f"Saved sampling failure frame: {output_path}")
 
 
 # ------------------------------------------------------------
-# Build GIF from saved PNG frames
+# Build GIF from frames
 # ------------------------------------------------------------
 def build_gif(frame_paths, gif_path, duration_per_frame=0.3):
     print(f"\nBuilding GIF: {gif_path}")
@@ -128,63 +207,34 @@ def build_gif(frame_paths, gif_path, duration_per_frame=0.3):
 
 
 # ------------------------------------------------------------
-# Stress Test 1: Noise robustness animation
+# Create sampling failure animation
 # ------------------------------------------------------------
-def create_noise_animation():
-    print("\nCreating noise robustness animation...")
+def create_sampling_failure_animation():
+    print("\nCreating sampling failure / limitation animation...")
 
-    frames_dir = os.path.join(PROJECT_ROOT, "animation_frames", "noise")
+    frames_dir = os.path.join(PROJECT_ROOT, "animation_frames", "sampling_failure")
     os.makedirs(frames_dir, exist_ok=True)
 
-    # 50 frames: noise gradually increases
-    noise_levels = np.linspace(0.005, 0.08, 50)
+    # 50 frames: sampling rate gradually decreases from safe to failing
+    fs_values = np.linspace(1000, 200, 50).astype(int)
 
     frame_paths = []
 
-    for i, noise_level in enumerate(noise_levels):
-        frame_path = os.path.join(frames_dir, f"noise_frame_{i:02d}.png")
+    for i, fs in enumerate(fs_values):
+        fs = float(fs)
 
-        save_frame(
-            case_title="Noise Robustness Stress Test",
-            subtitle=f"Pink noise level = {noise_level:.4f}",
+        if fs >= 500:
+            nperseg = 256
+            noverlap = 128
+        else:
+            nperseg = 128
+            noverlap = 64
+
+        frame_path = os.path.join(frames_dir, f"sampling_failure_frame_{i:02d}.png")
+
+        save_sampling_failure_frame(
             output_path=frame_path,
-            fs=1000.0,
-            noise_level=float(noise_level),
-            nperseg=256,
-            noverlap=128
-        )
-
-        frame_paths.append(frame_path)
-
-    gif_path = os.path.join(PROJECT_ROOT, "noise_animation.gif")
-    build_gif(frame_paths, gif_path, duration_per_frame=0.3)
-
-
-# ------------------------------------------------------------
-# Stress Test 2: STFT window sensitivity animation
-# ------------------------------------------------------------
-def create_window_animation():
-    print("\nCreating STFT window sensitivity animation...")
-
-    frames_dir = os.path.join(PROJECT_ROOT, "animation_frames", "window")
-    os.makedirs(frames_dir, exist_ok=True)
-
-    # 50 frames: STFT window gradually becomes shorter
-    nperseg_values = np.linspace(1024, 64, 50).astype(int)
-
-    frame_paths = []
-
-    for i, nperseg in enumerate(nperseg_values):
-        nperseg = int(nperseg)
-        noverlap = nperseg // 2
-
-        frame_path = os.path.join(frames_dir, f"window_frame_{i:02d}.png")
-
-        save_frame(
-            case_title="STFT Window Length Stress Test",
-            subtitle=f"nperseg = {nperseg}, noverlap = {noverlap}",
-            output_path=frame_path,
-            fs=1000.0,
+            fs=fs,
             noise_level=0.005,
             nperseg=nperseg,
             noverlap=noverlap
@@ -192,7 +242,7 @@ def create_window_animation():
 
         frame_paths.append(frame_path)
 
-    gif_path = os.path.join(PROJECT_ROOT, "window_animation.gif")
+    gif_path = os.path.join(PROJECT_ROOT, "sampling_failure_animation.gif")
     build_gif(frame_paths, gif_path, duration_per_frame=0.3)
 
 
@@ -200,15 +250,13 @@ def create_window_animation():
 # Main function
 # ------------------------------------------------------------
 def main():
-    print("Starting animated stress tests...")
+    print("Starting sampling failure case animation...")
 
-    create_noise_animation()
-    create_window_animation()
+    create_sampling_failure_animation()
 
-    print("\nStress test animations complete.")
+    print("\nFailure case animation complete.")
     print("Check the main project folder for:")
-    print("- noise_animation.gif")
-    print("- window_animation.gif")
+    print("- sampling_failure_animation.gif")
 
 
 if __name__ == "__main__":
