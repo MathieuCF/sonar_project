@@ -4,7 +4,25 @@ from scipy.signal import lfilter
 def generate_sonar_signal(t, coords, r_direct, fs=1000.0):
     """
     Synthesizes a high-fidelity passive sonar time-series recording featuring 
-    a moving submarine signature distorted by Arctic multi-path propagation.
+    a moving submarine signature distorted by Arctic multi-path propagation 
+    and embedded within a continuous ambient background ocean noise floor.
+    
+    Parameters:
+    -----------
+    t : ndarray
+        1D NumPy array representing the time steps of the simulation (seconds).
+    coords : dict
+        Dictionary containing arrays for 'x', 'y', 'z' positions of the sub over time.
+    r_direct : ndarray
+        1D array containing the true direct line-of-sight distance (meters).
+    fs : float
+        Sampling rate of the simulation system (Hz).
+        
+    Returns:
+    --------
+    composite_sea_signal : ndarray
+        1D array representing the singular composite voltage/pressure acoustic stream 
+        received at the stationary hydrophone sensor.
     """
     N = len(t)
     c = 1440.0  # Speed of sound in cold Arctic water (m/s)
@@ -27,7 +45,7 @@ def generate_sonar_signal(t, coords, r_direct, fs=1000.0):
     cavitation_signature = shaped_hiss * modulation
     
     # Combine into a single core structural signature emitted by the boat
-    raw_sub_signal = 1 * machinery_tone + 0.6 * cavitation_signature
+    raw_sub_signal = 1.5 * machinery_tone + 1.0 * cavitation_signature
     
     # -------------------------------------------------------------------------
     # PART 2: MULTI-PATH ACOUSTIC PROPAGATION (The Arctic Waveguide)
@@ -36,7 +54,7 @@ def generate_sonar_signal(t, coords, r_direct, fs=1000.0):
     z_hydro = 200.0
     H = 400.0
     
-    # Initialize our final hydrophone receiver array
+    # Initialize our intermediate hydrophone receiver array for target acoustic energy
     received_signal = np.zeros(N)
     
     # Vectorized loop through time to apply dynamic propagation delays
@@ -59,8 +77,7 @@ def generate_sonar_signal(t, coords, r_direct, fs=1000.0):
         t_delay_floor = r_floor / c
         idx_floor = i - int(t_delay_floor * fs)
         
-        # Constructive accumulation with environmental damping (attenuation)
-        # We ensure indices stay within the boundaries of our simulated time array
+        # Constructive/destructive accumulation with environmental damping (attenuation / r)
         if idx_d >= 0:
             received_signal[i] += raw_sub_signal[idx_d] / r_d
         if idx_ice >= 0:
@@ -68,4 +85,27 @@ def generate_sonar_signal(t, coords, r_direct, fs=1000.0):
         if idx_floor >= 0:
             received_signal[i] += (0.6 * raw_sub_signal[idx_floor]) / r_floor
             
-    return received_signal
+    # -------------------------------------------------------------------------
+    # PART 3: AMBIENT BACKGROUND NOISE GENERATION (1/f Pink Noise Floor)
+    # -------------------------------------------------------------------------
+    white_noise = np.random.normal(0, 1.0, N)
+    
+    # Frequency domain shaping to construct the 1/f spectral profile
+    noise_fft = np.fft.rfft(white_noise)
+    frequencies = np.fft.rfftfreq(N, d=1/fs)
+    frequencies[0] = 1.0  # Safeguard against division by zero at DC
+    
+    pink_filter = 1.0 / np.sqrt(frequencies)
+    pink_noise_fft = noise_fft * pink_filter
+    pink_noise = np.fft.irfft(pink_noise_fft, N)
+    
+    # Standardize the variance and apply background environmental scaling
+    pink_noise = (pink_noise / np.std(pink_noise)) * 0.005
+    
+    # -------------------------------------------------------------------------
+    # COMPOSITE OUTPUT
+    # -------------------------------------------------------------------------
+    # Merge target acoustic waves and background ambient noise into the final vector
+    composite_sea_signal = received_signal + pink_noise
+    
+    return composite_sea_signal
