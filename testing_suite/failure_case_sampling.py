@@ -35,20 +35,6 @@ def create_pink_noise(t, fs, noise_level, seed=42):
 
 
 # ------------------------------------------------------------
-# Calculate alias frequency
-# ------------------------------------------------------------
-def alias_frequency(true_frequency, fs):
-    """
-    Calculates where a frequency appears after aliasing.
-    Example:
-    true frequency = 160 Hz
-    fs = 250 Hz
-    alias = 90 Hz
-    """
-    return abs(((true_frequency + fs / 2) % fs) - fs / 2)
-
-
-# ------------------------------------------------------------
 # Compute one spectrogram
 # ------------------------------------------------------------
 def compute_spectrogram(
@@ -79,7 +65,7 @@ def compute_spectrogram(
 
 
 # ------------------------------------------------------------
-# Save one frame for the sampling failure case
+# Save one clean frame for the sampling failure case
 # ------------------------------------------------------------
 def save_sampling_failure_frame(
     output_path,
@@ -98,7 +84,6 @@ def save_sampling_failure_frame(
     )
 
     nyquist = fs / 2
-    alias_160 = alias_frequency(160.0, fs)
 
     plt.figure(figsize=(12, 6))
 
@@ -120,67 +105,11 @@ def save_sampling_failure_frame(
     plt.xlabel("Time (seconds)", fontsize=12)
     plt.ylabel("Frequency (Hz)", fontsize=12)
 
-    # Only show valid frequency range
+    # Only show the valid frequency range
     plt.ylim(0, min(250, nyquist))
 
     cbar = plt.colorbar()
     cbar.set_label("Relative Intensity (dB)", fontsize=12)
-
-    # Mark true 80 Hz tone if it is below Nyquist
-    if 80 < nyquist:
-        plt.axhline(80, color="white", linestyle="--", linewidth=1.5)
-        plt.text(
-            1,
-            82,
-            "True 80 Hz tone",
-            fontsize=10,
-            color="black",
-            backgroundcolor="white"
-        )
-
-    # Mark true 160 Hz harmonic if it can be represented
-    if 160 < nyquist:
-        plt.axhline(160, color="white", linestyle="--", linewidth=1.5)
-        plt.text(
-            1,
-            162,
-            "True 160 Hz harmonic",
-            fontsize=10,
-            color="black",
-            backgroundcolor="white"
-        )
-
-        status_text = "OK: 160 Hz is below Nyquist and can be represented correctly."
-
-    else:
-        # If 160 Hz is above Nyquist, mark where it falsely appears
-        plt.axhline(alias_160, color="red", linestyle="--", linewidth=2.0)
-        plt.text(
-            1,
-            alias_160 + 2,
-            f"Misleading alias: 160 Hz appears near {alias_160:.1f} Hz",
-            fontsize=10,
-            color="black",
-            backgroundcolor="white"
-        )
-
-        status_text = (
-            "FAILURE: 160 Hz is above Nyquist.\n"
-            "The DFT/STFT can show a false lower frequency."
-        )
-
-    # Add explanation box
-    plt.text(
-        0.98,
-        0.95,
-        status_text,
-        transform=plt.gca().transAxes,
-        fontsize=10,
-        verticalalignment="top",
-        horizontalalignment="right",
-        color="black",
-        backgroundcolor="white"
-    )
 
     plt.tight_layout()
     plt.savefig(output_path, dpi=150)
