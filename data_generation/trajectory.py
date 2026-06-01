@@ -33,8 +33,8 @@ def calculate_submarine_trajectory(t, x0=-400, y0=120, z0=100, z_end=220):
     x_sub = x0 + v_x * t
     y_sub = y0 + v_y * t
     
-    # 3. Compute Vertical Position (Smooth, linear tactical deep dive)
-    # Linearly interpolates depth from z0 to z_end over the simulation timeline
+    # 3. Compute Vertical Position (linear dive rather than sinusoidal)
+    # calculate depth from z0 to z_end over the simulation timeline
     z_sub = z0 + ((z_end - z0) / t_max) * t
     
     # 4. Define Hydrophone Coordinates (Stationary mid-water at origin)
@@ -42,7 +42,7 @@ def calculate_submarine_trajectory(t, x0=-400, y0=120, z0=100, z_end=220):
     y_hydro = 0.0
     z_hydro = 200.0  # Suspended at 200m depth in a 400m water column
     
-    # 5. Compute Euclidean Distance (Direct Path) using Vectorized Math
+    # 5. Compute Direct flight path distance using vectorized Math
     r_direct = np.sqrt((x_sub - x_hydro)**2 + (y_sub - y_hydro)**2 + (z_sub - z_hydro)**2)
     
     # Store coordinates in a clean structure for subsequent reflection paths

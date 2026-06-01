@@ -3,12 +3,11 @@ from scipy.signal import lfilter
 
 def generate_sonar_signal(t, coords, r_direct, fs=1000.0):
     """
-    Synthesizes a high-fidelity passive sonar time-series recording featuring 
-    a moving submarine signature distorted by Arctic multi-path propagation 
-    and embedded within a continuous ambient background ocean noise floor.
+    Computes and synthesizes a realistic dynamic sound signal combining background pink noise and 
+    pulse modulated propeller cavitation sound.
     
     Parameters:
-    -----------
+
     t : ndarray
         1D NumPy array representing the time steps of the simulation (seconds).
     coords : dict
@@ -19,7 +18,7 @@ def generate_sonar_signal(t, coords, r_direct, fs=1000.0):
         Sampling rate of the simulation system (Hz).
         
     Returns:
-    --------
+
     composite_sea_signal : ndarray
         1D array representing the singular composite voltage/pressure acoustic stream 
         received at the stationary hydrophone sensor.
@@ -30,7 +29,7 @@ def generate_sonar_signal(t, coords, r_direct, fs=1000.0):
     # -------------------------------------------------------------------------
     # PART 1: SYNTHESIZE RAW SUBMARINE SIGNATURE (Machinery + Cavitation)
     # -------------------------------------------------------------------------
-    # Narrowband machinery tones (80 Hz fundamental + 160 Hz harmonic)
+    # Machinery noise (80 Hz + 160 Hz harmonic)
     machinery_tone = np.sin(2 * np.pi * 80.0 * t) + 0.4 * np.sin(2 * np.pi * 160.0 * t)
     
     # Broadband propeller cavitation (White noise shaped into broadband hiss)
@@ -39,7 +38,7 @@ def generate_sonar_signal(t, coords, r_direct, fs=1000.0):
     b, a = [0.1], [1, -0.9] 
     shaped_hiss = lfilter(b, a, raw_hiss)
     
-    # Shaft/Blade modulation (Trevorrow Effect: Hiss amplitude pulses at 1.5 Hz)
+    # modulating a imagined 7 blade propeller (sine wave modulation)
     blade_rate = 1.5  # Hz
     modulation = 1.0 + 0.6 * np.sin(2 * np.pi * blade_rate * t)
     cavitation_signature = shaped_hiss * modulation
@@ -47,9 +46,7 @@ def generate_sonar_signal(t, coords, r_direct, fs=1000.0):
     # Combine into a single core structural signature emitted by the boat
     raw_sub_signal = 1.5 * machinery_tone + 1.0 * cavitation_signature
     
-    # -------------------------------------------------------------------------
-    # PART 2: MULTI-PATH ACOUSTIC PROPAGATION (The Arctic Waveguide)
-    # -------------------------------------------------------------------------
+
     # Hydrophone depth is fixed at 200m in a 400m water column
     z_hydro = 200.0
     H = 400.0
@@ -86,11 +83,10 @@ def generate_sonar_signal(t, coords, r_direct, fs=1000.0):
             received_signal[i] += (0.6 * raw_sub_signal[idx_floor]) / r_floor
             
     # -------------------------------------------------------------------------
-    # PART 3: AMBIENT BACKGROUND NOISE GENERATION (1/f Pink Noise Floor)
+    # PART 2: AMBIENT BACKGROUND NOISE GENERATION (1/f Pink Noise Floor)
     # -------------------------------------------------------------------------
     white_noise = np.random.normal(0, 1.0, N)
     
-    # Frequency domain shaping to construct the 1/f spectral profile
     noise_fft = np.fft.rfft(white_noise)
     frequencies = np.fft.rfftfreq(N, d=1/fs)
     frequencies[0] = 1.0  # Safeguard against division by zero at DC
@@ -99,13 +95,13 @@ def generate_sonar_signal(t, coords, r_direct, fs=1000.0):
     pink_noise_fft = noise_fft * pink_filter
     pink_noise = np.fft.irfft(pink_noise_fft, N)
     
-    # Standardize the variance and apply background environmental scaling
+    # Apply some scaling to the background noise (.5%)
     pink_noise = (pink_noise / np.std(pink_noise)) * 0.005
     
     # -------------------------------------------------------------------------
     # COMPOSITE OUTPUT
     # -------------------------------------------------------------------------
-    # Merge target acoustic waves and background ambient noise into the final vector
+    # Merge submarine acoustic waves and background ambient noise into the final array
     composite_sea_signal = received_signal + pink_noise
     
     return composite_sea_signal
